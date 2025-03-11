@@ -1,82 +1,75 @@
-from flask import Flask, render_template ,request ,redirect , url_for
+from flask import Flask, render_template, request, redirect, url_for
 from flask_bootstrap import Bootstrap5
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField , TimeField , RadioField , SelectField, URLField
-from wtforms.validators import DataRequired , InputRequired , URL
-import csv
-
-
+from wtforms import StringField, SubmitField, BooleanField
+from wtforms.validators import DataRequired, URL
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cafes.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 Bootstrap5(app)
 
+db = SQLAlchemy(app)
+
+class Cafe(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250), nullable=False)
+    map_url = db.Column(db.String(500), nullable=False)
+    img_url = db.Column(db.String(500), nullable=False)
+    location = db.Column(db.String(250), nullable=False)
+    has_sockets = db.Column(db.Boolean, nullable=False)
+    has_toilet = db.Column(db.Boolean, nullable=False)
+    has_wifi = db.Column(db.Boolean, nullable=False)
+    can_take_calls = db.Column(db.Boolean, nullable=False)
+    seats = db.Column(db.String(250), nullable=True)
+    coffee_price = db.Column(db.String(250), nullable=True)
 
 class CafeForm(FlaskForm):
-    name = StringField("Cafe Name", validators=[DataRequired()])
-    location = URLField("Location URL", validators=[DataRequired()])
-    open_time = StringField("Opening Time", validators=[DataRequired()])
-    close_time = StringField("Closing Time", validators=[DataRequired()])
-    coffee_rating = SelectField(
-        "Coffee Rating",
-        choices=[("✘","✘"),("☕", "1 ☕"), ("☕☕", "2 ☕☕"), ("☕☕☕", "3 ☕☕☕"), 
-                 ("☕☕☕☕", "4 ☕☕☕☕"), ("☕☕☕☕☕", "5 ☕☕☕☕☕")],
-        validators=[DataRequired()],
-    )
-    wifi_rating = SelectField(
-        "Wifi Rating",
-        choices=[("✘","✘"),("💪", "1 💪"), ("💪💪", "2 💪💪"), ("💪💪💪", "3 💪💪💪"), 
-                 ("💪💪💪💪", "4 💪💪💪💪"), ("💪💪💪💪💪", "5 💪💪💪💪💪")],
-        validators=[DataRequired()],
-    )
-    power_rating = SelectField(
-        "Power Rating",
-        choices=[("✘","✘"),("🔌", "1 🔌"), ("🔌🔌", "2 🔌🔌"), ("🔌🔌🔌", "3 🔌🔌🔌"), 
-                 ("🔌🔌🔌🔌", "4 🔌🔌🔌🔌"), ("🔌🔌🔌🔌🔌", "5 🔌🔌🔌🔌🔌")],
-        validators=[DataRequired()],
-    )
-    submit = SubmitField("Add Cafe")
+    name = StringField('Cafe Name', validators=[DataRequired()])
+    map_url = StringField('Map URL', validators=[DataRequired(), URL()])
+    img_url = StringField('Image URL', validators=[DataRequired(), URL()])
+    location = StringField('Location', validators=[DataRequired()])
+    has_sockets = BooleanField('Has Sockets')
+    has_toilet = BooleanField('Has Toilet')
+    has_wifi = BooleanField('Has WiFi')
+    can_take_calls = BooleanField('Can Take Calls')
+    seats = StringField('Seats')
+    coffee_price = StringField('Coffee Price')
+    submit = SubmitField('Submit')
 
-# all Flask routes below
-@app.route("/")
+@app.route('/')
 def home():
     return render_template("index.html")
 
-
-
-
-@app.route('/add' , methods = ['GET' , 'POST'])
+@app.route('/add', methods=['GET', 'POST'])
 def add_cafe():
     form = CafeForm()
     if form.validate_on_submit():
-        with open('cafe-data.csv', mode='a', newline='', encoding='utf-8') as csv_file:
-            csv_writer = csv.writer(csv_file)
-            csv_writer.writerow([
-                form.name.data,
-                form.location.data,
-                form.open_time.data,
-                form.close_time.data,
-                form.coffee_rating.data,
-                form.wifi_rating.data,
-                form.power_rating.data
-            ])
+        new_cafe = Cafe(
+            name=form.name.data,
+            map_url=form.map_url.data,
+            img_url=form.img_url.data,
+            location=form.location.data,
+            has_sockets=form.has_sockets.data,
+            has_toilet=form.has_toilet.data,
+            has_wifi=form.has_wifi.data,
+            can_take_calls=form.can_take_calls.data,
+            seats=form.seats.data,
+            coffee_price=form.coffee_price.data
+        )
+        db.session.add(new_cafe)
+        db.session.commit()
         return redirect(url_for('cafes'))
     return render_template('add.html', form=form)
-    
-
 
 @app.route('/cafes')
 def cafes():
-    with open('cafe-data.csv', newline='', encoding='utf-8') as csv_file:
-        csv_data = csv.reader(csv_file, delimiter=',')
-        list_of_rows = []
-        for row in csv_data:
-            list_of_rows.append(row)
-        
-    return render_template('cafes.html', cafes=list_of_rows)
-
-
-
+    all_cafes = Cafe.query.all()
+    return render_template('cafes.html', cafes=all_cafes)
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
